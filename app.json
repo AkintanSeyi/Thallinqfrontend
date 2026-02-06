@@ -1,29 +1,74 @@
 {
   "expo": {
-    "name": "my-app",
-    "slug": "my-app",
+    "name": "ThaLinq",
+    "slug": "ThaLinq",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/ThaLinq.jpg",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/ThaLinq.jpg",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.thalinq.app",
+      "buildNumber": "2",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "ThaLinq requires access to your photo library to allow you to upload a profile picture and share photos of events or parties within your groups.",
+        "NSCameraUsageDescription": "ThaLinq requires access to your camera to allow you to take and post photos directly to your party groups and update your profile picture."
+      }
     },
     "android": {
+      "usesCleartextTraffic": true,
+      "package": "com.thalinq.app",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/ThaLinq.jpg",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/ThaLinq.jpg"
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#ffffff",
+          "image": "./assets/ThaLinq.jpg",
+          "resizeMode": "cover",
+          "enableFullScreenImage_legacy": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ThaLinq requires access to your photo library to allow you to upload a profile picture and share photos of events or parties within your groups.",
+          "cameraPermission": "ThaLinq requires access to your camera to allow you to take and post photos directly to your party groups and update your profile picture."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "72254f3a-d754-40e9-9827-3e901840cb68"
+      }
     }
   }
 }
