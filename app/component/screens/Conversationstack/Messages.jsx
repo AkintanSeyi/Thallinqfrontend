@@ -14,6 +14,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Notifications from 'expo-notifications';
 import { io } from 'socket.io-client';
 import * as ImagePicker from 'expo-image-picker'; // Required: npx expo install expo-image-picker
 import * as api from '../../../../api/index';
@@ -30,21 +31,33 @@ const Messages = ({ route, navigation }) => {
   const [isSending, setIsSending] = useState(false);
   const socket = useRef(null);
 
-  useEffect(() => {
-    socket.current = io(SOCKET_URL);
-    socket.current.emit("join_room", conversationId);
-    fetchMessageHistory();
+ useEffect(() => {
+  socket.current = io(SOCKET_URL);
+  socket.current.emit("join_room", conversationId);
+  fetchMessageHistory();
 
-    socket.current.on("receive_message", (newMessage) => {
-      if (newMessage.sender._id !== currentUserId) {
-        setMessages((prev) => [newMessage, ...prev]);
-      }
-    });
+  // Listen for messages
+  socket.current.on("receive_message", (newMessage) => {
+    // Only add to list if it's from the other person
+    if (newMessage.sender._id !== currentUserId) {
+      setMessages((prev) => [newMessage, ...prev]);
+    }
+  });
 
-    return () => {
-      if (socket.current) socket.current.disconnect();
-    };
-  }, [conversationId]);
+  // --- ADD THIS FOR NOTIFICATIONS ---
+  const subscription = Notifications.addNotificationReceivedListener(notification => {
+    const data = notification.request.content.data;
+    // If the notification is for the chat I'm ALREADY in, don't show the alert
+    if (data.type === 'chat' && data.conversationId === conversationId) {
+      // Logic to perhaps "read" the message or just ignore the vibration
+    }
+  });
+
+  return () => {
+    if (socket.current) socket.current.disconnect();
+    subscription.remove(); // Clean up the listener
+  };
+}, [conversationId]);
 
   const fetchMessageHistory = async () => {
     try {

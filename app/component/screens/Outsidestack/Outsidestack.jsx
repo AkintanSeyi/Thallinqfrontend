@@ -3,17 +3,9 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { View } from 'react-native';
 
-// Import your screens
-import ProfileStack from './screens/Profilestackpages';
-import GroupStack from './screens/Groupstack/Groupstack';
-import HomePageStack from './screens/Homepagestack/HomepageStack';
-import Conversationstack from './screens/Conversationstack/Conversationstack';
-
-const Tab = createBottomTabNavigator();
-
-export default function BottomTabs({ setIsLoggedIn }) {
+const Outsidestack = () => {
   return (
-    <Tab.Navigator
+   <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: false,
@@ -57,16 +49,17 @@ export default function BottomTabs({ setIsLoggedIn }) {
         },
       })}
     >
-      <Tab.Screen name="Home">
+      <Tab.Screen name="Landingpage">
         {(props) => <HomePageStack {...props} setIsLoggedIn={setIsLoggedIn} />}
       </Tab.Screen>
 
       <Tab.Screen name="Groups" component={GroupStack} />
       <Tab.Screen name="Conversation" component={Conversationstack} />
 
-      <Tab.Screen name="Profile">
-        {(props) => <ProfileStack {...props} setIsLoggedIn={setIsLoggedIn} />}
-      </Tab.Screen>
     </Tab.Navigator>
-  );
+  )
 }
+
+export default Outsidestack
+
+const styles = StyleSheet.create({})

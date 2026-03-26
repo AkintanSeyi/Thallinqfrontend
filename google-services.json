@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "209237631699",
+    "project_id": "thalinq",
+    "storage_bucket": "thalinq.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:209237631699:android:1d9d635b89463a765eea26",
+        "android_client_info": {
+          "package_name": "com.thalinq.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyClmOyHlPGvXVLxDZMkM-h0_QVSmCHaffc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

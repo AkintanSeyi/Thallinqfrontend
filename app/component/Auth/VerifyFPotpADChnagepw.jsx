@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, Text, TextInput, TouchableOpacity, StyleSheet, 
   Keyboard, SafeAreaView, Alert, ActivityIndicator 
@@ -10,16 +10,41 @@ const VerifyFPotpADChnagepw = () => {
   const navigation = useNavigation();
   const route = useRoute();
   
-  // Get email passed from the SendEmail screen
   const { email } = route.params || { email: '' };
 
   const [isVerified, setIsVerified] = useState(false);
   const [loading, setLoading] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [passwords, setPasswords] = useState({ new: '', confirm: '' });
+  
+  // --- NEW STATE FOR VISIBILITY ---
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const inputs = useRef([]);
 
-  // --- Logic: Verify the 6-digit Code ---
+  useEffect(() => {
+    if (email) {
+      autoSendOTP();
+    } else {
+      Alert.alert("Error", "No email found. Please go back.", [
+        { text: "Go Back", onPress: () => navigation.goBack() }
+      ]);
+    }
+  }, []);
+
+  const autoSendOTP = async () => {
+    try {
+      const response = await api.sendOTP(email);
+      if (response.data.success) {
+        console.log("OTP sent!");
+      }
+    } catch (error) {
+      const errorMsg = error.response?.data?.message || "Server Error (500)";
+      console.error("Auto-send OTP error:", errorMsg);
+    }
+  };
+
   const verifyOtp = async () => {
     const code = otp.join('');
     if (code.length !== 6) {
@@ -29,18 +54,17 @@ const VerifyFPotpADChnagepw = () => {
 
     setLoading(true);
     try {
-      const response = await api.verifyResetCode(email, code);
+      const response = await api.verifyOTP(email, code);
       if (response.data.success) {
-        setIsVerified(true); // Move to Step 2 (New Password View)
+        setIsVerified(true); 
       }
     } catch (error) {
-      Alert.alert("Verification Failed", error.response?.data?.error || "Invalid code");
+      Alert.alert("Verification Failed", error.response?.data?.message || "Invalid code");
     } finally {
       setLoading(false);
     }
   };
 
-  // --- Logic: Reset to New Password ---
   const handleResetPassword = async () => {
     if (!passwords.new || !passwords.confirm) {
       Alert.alert("Error", "Please fill in all fields.");
@@ -57,13 +81,11 @@ const VerifyFPotpADChnagepw = () => {
 
     setLoading(true);
     try {
-      const code = otp.join(''); // We send the code again to verify the request on backend
-      const response = await api.resetPassword(email, code, passwords.new);
-      
-      // Alert.alert("Success", "Password reset successful!", [
-      //   { text: "Login Now", onPress: () => navigation.navigate("SignIn") }
-      // ]);
-      navigation.navigate("SignIn") 
+      const code = otp.join('');
+      await api.resetPassword(email, code, passwords.new);
+      Alert.alert("Success", "Password updated!", [
+        { text: "OK", onPress: () => navigation.navigate("SignIn") }
+      ]);
     } catch (error) {
       Alert.alert("Reset Failed", error.response?.data?.error || "Something went wrong");
     } finally {
@@ -88,9 +110,7 @@ const VerifyFPotpADChnagepw = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        
         {!isVerified ? (
-          /* --- STEP 1: OTP VERIFICATION VIEW --- */
           <View style={styles.stepContainer}>
             <Text style={styles.title}>Verify Code</Text>
             <Text style={styles.subtitle}>Enter the code sent to {email}</Text>
@@ -113,33 +133,54 @@ const VerifyFPotpADChnagepw = () => {
             <TouchableOpacity style={styles.primaryButton} onPress={verifyOtp} disabled={loading}>
               {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Verify Code</Text>}
             </TouchableOpacity>
+            
+            <TouchableOpacity onPress={autoSendOTP} style={{marginTop: 20}}>
+              <Text style={{textAlign: 'center', color: '#666'}}>
+                Didn't get code? <Text style={{fontWeight: 'bold', color: '#000'}}>Resend</Text>
+              </Text>
+            </TouchableOpacity>
           </View>
         ) : (
-          /* --- STEP 2: NEW PASSWORD VIEW --- */
           <View style={styles.stepContainer}>
             <Text style={styles.title}>New Password</Text>
             <Text style={styles.subtitle}>Set a strong new password for your account.</Text>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>New Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="********"
-                secureTextEntry
-                value={passwords.new}
-                onChangeText={(text) => setPasswords({...passwords, new: text})}
-              />
+              <View style={styles.passwordWrapper}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="********"
+                  secureTextEntry={!showPassword}
+                  value={passwords.new}
+                  onChangeText={(text) => setPasswords({...passwords, new: text})}
+                />
+                <TouchableOpacity 
+                  onPress={() => setShowPassword(!showPassword)} 
+                  style={styles.eyeButton}
+                >
+                  <Text style={styles.eyeText}>{showPassword ? "Hide" : "Show"}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Confirm Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="********"
-                secureTextEntry
-                value={passwords.confirm}
-                onChangeText={(text) => setPasswords({...passwords, confirm: text})}
-              />
+              <View style={styles.passwordWrapper}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="********"
+                  secureTextEntry={!showConfirmPassword}
+                  value={passwords.confirm}
+                  onChangeText={(text) => setPasswords({...passwords, confirm: text})}
+                />
+                <TouchableOpacity 
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)} 
+                  style={styles.eyeButton}
+                >
+                  <Text style={styles.eyeText}>{showConfirmPassword ? "Hide" : "Show"}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <TouchableOpacity style={styles.primaryButton} onPress={handleResetPassword} disabled={loading}>
@@ -147,7 +188,6 @@ const VerifyFPotpADChnagepw = () => {
             </TouchableOpacity>
           </View>
         )}
-
       </View>
     </SafeAreaView>
   );
@@ -166,10 +206,15 @@ const styles = StyleSheet.create({
   },
   inputGroup: { marginBottom: 20 },
   label: { fontSize: 14, fontWeight: '600', marginBottom: 8, color: '#333' },
+  // UPDATED WRAPPER AND INPUT FOR EYE BUTTON
+  passwordWrapper: { position: 'relative', justifyContent: 'center' },
   input: {
     height: 55, backgroundColor: '#F5F7FA', borderRadius: 12,
-    paddingHorizontal: 16, borderWidth: 1, borderColor: '#E1E8ED'
+    paddingHorizontal: 16, borderWidth: 1, borderColor: '#E1E8ED',
+    width: '100%'
   },
+  eyeButton: { position: 'absolute', right: 15 },
+  eyeText: { color: '#000', fontWeight: 'bold', fontSize: 12 },
   primaryButton: {
     backgroundColor: '#000', height: 55, borderRadius: 12,
     justifyContent: 'center', alignItems: 'center', marginTop: 10

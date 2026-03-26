@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const axiosInstance = axios.create({
   // Use your production URL or your local IP for testing on physical devices
-  baseURL: "http://192.168.122.160:5000",   //http://192.168.51.160:5000   //https://tlbackend.onrender.com
+  baseURL: "https://tlbackend.onrender.com",   //http://192.168.51.160:5000   //https://tlbackend.onrender.com
  
 });
 
@@ -14,6 +14,7 @@ axiosInstance.interceptors.request.use(
       const token = await AsyncStorage.getItem("token");
       if (token) {
         config.headers["Authorization"] = `Bearer ${token}`;
+        
       }
     } catch (e) {
       console.error("Error fetching token", e);
@@ -27,6 +28,11 @@ axiosInstance.interceptors.request.use(
 
 // ✅ Auth routes
 export const login = (formdata) => axiosInstance.post("/api/auth/login", formdata);
+export const updateUserPushToken = (userId, token) => 
+  axiosInstance.post('/api/auth/update-push-token', { userId, token });
+// Path: /api/index.js
+export const getUserProfileById = (userId) => 
+  axiosInstance.get(`/api/auth/user-profile/${userId}`);
 export const signup = (formdata) => axiosInstance.post("/api/auth/signup", formdata);
 export const completeProfile = (formData) => axiosInstance.patch("/api/auth/complete-profile", formData, {
   headers: { "Content-Type": "multipart/form-data" }
@@ -49,16 +55,17 @@ export const createGroup = (formData) => {
     transformRequest: (data) => data, // This is key for React Native
   });
 };
-export const getLatestGroups = () => axiosInstance.get("/api/latest-groups");
+// Ensure userId is being passed in the URL
+export const getLatestGroups = (userId) => axiosInstance.get(`/api/latest-groups?userId=${userId}`);
 
 // api/index.js
-export const getGroups = (page, category, search) => {
-  // This builds the URL: /api/all-groups?page=1&category=Social&search=club
+export const getGroups = (page, category, search, userId) => {
   return axiosInstance.get(`/api/all-groups`, {
     params: {
       page,
       category,
-      search
+      search,
+      userId // Pass userId to the backend
     }
   });
 };
@@ -126,10 +133,32 @@ export const markAsRead = (data) =>
 
 // Example in your api/index.js
 export const createConversation = (data) => axiosInstance.post('/api/message/conversations', data);
-
+export const getExploreStreams = (category, page = 1) => 
+  axiosInstance.get(`/api/groups/exploresteampage?category=${category}&page=${page}&limit=10`);
 export const getConversations = (userId) => axiosInstance.get(`/api/message/conversations/${userId}`);
 export const deleteAccount = (email) => axiosInstance.post('/api/auth/delete-account', { email });
 export const getGroupAnalytics = (groupId) => axiosInstance.get(`/api/groups/${groupId}/analytics`);
+export const startGroupLive = (groupId, userId) => 
+  axiosInstance.post(`/api/groups/${groupId}/start-live`, { userId });
+
+export const getMyLiveGroups = (userId) => axiosInstance.get(`/api/groups/my-live-groups?userId=${userId}`);
+
+export const stopGroupLive = (groupId, userId) => 
+  axiosInstance.post(`/api/groups/${groupId}/stop-live`, { userId });
+
+export const joinGroupLive = (groupId) => axiosInstance.get(`/api/groups/${groupId}/join-live`);
 
 export const createPaymentIntent = (data) => axiosInstance.post('/api/payments/create-intent', data);
 export const verifyPaymentAndJoin = (data) => axiosInstance.post('/api/payments/verify-and-join', data);
+
+// Change this line to accept and send the userId body
+export const likeGroup = (groupId, userId) => axiosInstance.post(`/api/${groupId}/like`, { userId });
+// Remove the extra /api if your axiosInstance already includes it
+export const commentOnGroup = ({ postId, userId, text }) => 
+  axiosInstance.post(`/api/posthome/${postId}/comment`, { userId, text });
+
+
+export const deletehomeComment = (postId, commentId, userId) => 
+  axiosInstance.delete(`/api/posthome/${postId}/comment/${commentId}`, { 
+    data: { userId } 
+  });

@@ -14,13 +14,15 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Share,  Linking ,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useNavigation, useRoute, useTheme, useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { jwtDecode } from "jwt-decode";
+
 import * as api from "../../../../api/index";
 
 const GroupDetail = () => {
@@ -44,6 +46,44 @@ const GroupDetail = () => {
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
   const [commentText, setCommentText] = useState("");
+ const [shareModalVisible, setShareModalVisible] = useState(false);
+
+const handleSocialShare = async (platform) => {
+  // Use the group name or the specific post content
+  const shareName = selectedPost ? `Post by ${selectedPost.author?.name}` : group?.name;
+  const shareMessage = `Check out ${shareName} on ThaLinq!`;
+  const shareUrl = `https://thalinq.com/group/${id}`; // Link to the group
+  
+  let url = '';
+  switch(platform) {
+    case 'Facebook':
+      url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+      break;
+    case 'X': 
+      url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareMessage)}&url=${encodeURIComponent(shareUrl)}`; 
+      break;
+    case 'LinkedIn': 
+      url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`; 
+      break;
+    case 'Instagram': 
+      url = Platform.OS === 'ios' ? 'instagram://' : 'https://www.instagram.com/'; 
+      break;
+    case 'Copy Link':
+      // Requires: import * as Clipboard from 'expo-clipboard';
+      Alert.alert("Link Copied", "Group link copied to clipboard!");
+      setShareModalVisible(false);
+      return;
+  }
+  
+  try {
+    await Linking.openURL(url);
+  } catch (error) {
+    Alert.alert("Error", "App not installed. Opening browser...");
+    // Fallback if app isn't found (for X/Facebook/LinkedIn)
+    if (url.startsWith('http')) await Linking.openURL(url);
+  }
+  setShareModalVisible(false);
+};
 
   useFocusEffect(
     useCallback(() => {
@@ -405,35 +445,68 @@ const handleOpenCommentMenu = (comment) => {
     m.user?.name?.toLowerCase().includes(memberSearch.toLowerCase())
   ) || [];
 
-  const renderPost = ({ item }) => {
-    const isLiked = item.likes?.includes(currentUserId);
-    return (
-      <View style={[styles.postCard, { backgroundColor: dark ? "#1E293B" : "#F8FAFC" }]}>
-        <View style={styles.postHeader}>
-          <Image source={{ uri: item.author?.profileImage || "https://via.placeholder.com/40" }} style={styles.postAvatar} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.postUser, { color: colors.text }]}>{item.author?.name || "User"}</Text>
-            <Text style={styles.postTime}>{new Date(item.createdAt).toLocaleDateString()}</Text>
-          </View>
-          {/* POST THREE DOTS ADDED HERE */}
-          <TouchableOpacity onPress={() => handleOpenPostMenu(item)}>
-            <Ionicons name="ellipsis-horizontal" size={20} color="#94A3B8" />
-          </TouchableOpacity>
+ const renderPost = ({ item }) => {
+  const isLiked = item.likes?.includes(currentUserId);
+  
+  return (
+    <View style={[styles.postCard, { backgroundColor: dark ? "#1E293B" : "#F8FAFC" }]}>
+      <View style={styles.postHeader}>
+        <Image 
+          source={{ uri: item.author?.profileImage || "https://via.placeholder.com/40" }} 
+          style={styles.postAvatar} 
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.postUser, { color: colors.text }]}>
+            {item.author?.name || "User"}
+          </Text>
+          <Text style={styles.postTime}>
+            {new Date(item.createdAt).toLocaleDateString()}
+          </Text>
         </View>
-        <Text style={[styles.postContent, { color: dark ? "#CBD5E1" : "#475569" }]}>{item.content}</Text>
-        <View style={styles.postActions}>
-          <TouchableOpacity style={styles.actionItem} onPress={() => handleLike(item._id)}>
-            <Ionicons name={isLiked ? "heart" : "heart-outline"} size={22} color={isLiked ? "#EF4444" : "#94A3B8"} />
-            <Text style={[styles.actionText, { color: isLiked ? "#EF4444" : "#94A3B8" }]}>{item.likes?.length || 0}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionItem} onPress={() => openComments(item)}>
-            <Ionicons name="chatbubble-outline" size={20} color="#94A3B8" />
-            <Text style={styles.actionText}>{item.comments?.length || 0} Comments</Text>
-          </TouchableOpacity>
-        </View>
+        
+        <TouchableOpacity onPress={() => handleOpenPostMenu(item)}>
+          <Ionicons name="ellipsis-horizontal" size={20} color="#94A3B8" />
+        </TouchableOpacity>
       </View>
-    );
-  };
+
+      <Text style={[styles.postContent, { color: dark ? "#CBD5E1" : "#475569" }]}>
+        {item.content}
+      </Text>
+
+      <View style={styles.postActions}>
+        {/* Like Button */}
+        <TouchableOpacity style={styles.actionItem} onPress={() => handleLike(item._id)}>
+          <Ionicons 
+            name={isLiked ? "heart" : "heart-outline"} 
+            size={22} 
+            color={isLiked ? "#EF4444" : "#94A3B8"} 
+          />
+          <Text style={[styles.actionText, { color: isLiked ? "#EF4444" : "#94A3B8" }]}>
+            {item.likes?.length || 0}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Comment Button */}
+        <TouchableOpacity style={styles.actionItem} onPress={() => openComments(item)}>
+          <Ionicons name="chatbubble-outline" size={20} color="#94A3B8" />
+          <Text style={styles.actionText}>{item.comments?.length || 0} Comments</Text>
+        </TouchableOpacity>
+
+        {/* Share Button - ADDED THIS */}
+        <TouchableOpacity 
+          style={[styles.actionItem, { marginLeft: 'auto' }]} 
+          onPress={() => {
+            setSelectedPost(item);
+            setShareModalVisible(true);
+          }}
+        >
+          <Ionicons name="paper-plane-outline" size={20} color="#94A3B8" />
+          <Text style={styles.actionText}>Share</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
 
   const renderMember = ({ item }) => {
     const groupCreatorId = group?.creator?._id || group?.creator;
@@ -463,6 +536,51 @@ const handleOpenCommentMenu = (comment) => {
     );
   };
 
+  const handleJoinLive = async () => {
+  setLoading(true);
+  try {
+    const response = await api.joinGroupLive(id);
+    if (response.data.success) {
+      navigation.navigate("LiveStream", { 
+        groupId: id,
+        token: response.data.token,
+        channelName: response.data.channelName,
+        uid: response.data.uid,
+        role: 'audience', // Set as audience
+        currentUserId: currentUserId
+      });
+    }
+  } catch (error) {
+    Alert.alert("Error", "This live stream might have just ended.");
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleStartLive = async () => {
+  setLoading(true);
+  try {
+    const response = await api.startGroupLive(id, currentUserId);
+
+    if (response.data.success) {
+      // FIX: Pass the UID from the response!
+      navigation.navigate("LiveStream", { 
+        groupId: id,
+        token: response.data.token,
+        channelName: response.data.channelName,
+        uid: response.data.uid, // <--- ADD THIS LINE
+        role: 'broadcaster',
+        currentUserId: currentUserId
+      });
+    }
+  } catch (error) {
+    Alert.alert("Error", "Could not start live session.");
+    console.error(error);
+  } finally {
+    setLoading(false);
+  }
+};
+
   const ListHeader = useMemo(() => {
     const groupCreatorId = group?.creator?._id || group?.creator;
     const isCreator = groupCreatorId && currentUserId && String(groupCreatorId) === String(currentUserId);
@@ -485,6 +603,25 @@ const handleOpenCommentMenu = (comment) => {
               <Text style={[styles.categoryText, { color: colors.primary }]}>{group?.category} • {group?.memberCount} members</Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {isCreator && (
+   <TouchableOpacity 
+  onPress={handleStartLive} // Use the new function here
+  style={styles.liveBtn}
+>
+  <Ionicons name="videocam" size={18} color="#FFF" />
+  <Text style={styles.liveBtnText}>Start Live</Text>
+</TouchableOpacity>
+    )}
+    
+{!isCreator && group?.isLive && (
+  <TouchableOpacity 
+    style={[styles.liveBtn, { backgroundColor: '#EF4444' }]} 
+    onPress={handleJoinLive} // Call the function instead of direct navigate
+  >
+    <Ionicons name="pulse" size={18} color="#FFF" />
+    <Text style={styles.liveBtnText}>Join Live</Text>
+  </TouchableOpacity>
+)}
                 {isMember && (
                 <TouchableOpacity onPress={handleToggleNotifications} style={[styles.notifBtn, { borderColor: colors.border, marginRight: 8 }]}>
                     <Ionicons name={notificationsEnabled ? "notifications" : "notifications-off-outline"} size={22} color={notificationsEnabled ? colors.primary : "#94A3B8"} />
@@ -494,13 +631,13 @@ const handleOpenCommentMenu = (comment) => {
                 <TouchableOpacity onPress={handleToggleMembership} style={[styles.notifBtn, { borderColor: colors.border, backgroundColor: isMember ? 'transparent' : colors.primary }]}>
                     <Ionicons name={isMember ? "exit-outline" : "person-add-outline"} size={22} color={isMember ? colors.text : "#FFF"} />
                 </TouchableOpacity>
-                )}
+                )} 
                 {isCreator && (
                     <TouchableOpacity onPress={handleEditGroup} style={[styles.notifBtn, { borderColor: colors.border, marginLeft: 8 }]}>
                     <Ionicons name="create-outline" size={22} color={colors.text} />
                     </TouchableOpacity>
                 )}
-            </View>
+            </View> 
           </View>
           <Text style={[styles.groupDesc, { color: dark ? "#94A3B8" : "#64748B" }]}>{group?.description}</Text>
         </View>
@@ -614,6 +751,49 @@ const handleOpenCommentMenu = (comment) => {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+      {/* SHARE MODAL */}
+<Modal
+  animationType="fade"
+  transparent={true}
+  visible={shareModalVisible}
+  onRequestClose={() => setShareModalVisible(false)}
+>
+  <TouchableOpacity 
+    style={styles.modalOverlay} 
+    activeOpacity={1} 
+    onPress={() => setShareModalVisible(false)}
+  >
+    <View style={[styles.modalContent, { backgroundColor: colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20 }]}>
+      <View style={styles.modalHeader}>
+        <Text style={[styles.modalTitle, { color: colors.text }]}>Share to Socials</Text>
+        <TouchableOpacity onPress={() => setShareModalVisible(false)}>
+          <Ionicons name="close" size={24} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={{ paddingBottom: 30 }}>
+        {[
+          { name: 'Facebook', icon: 'logo-facebook', color: '#1877F2' },
+          { name: 'Instagram', icon: 'logo-instagram', color: '#E1306C' },
+          { name: 'X', icon: 'logo-twitter', color: '#000000' },
+          { name: 'LinkedIn', icon: 'logo-linkedin', color: '#0077B5' },
+          { name: 'Copy Link', icon: 'link-outline', color: '#64748B' },
+        ].map((p) => (
+          <TouchableOpacity 
+            key={p.name}
+            style={[styles.inputRow, { borderBottomWidth: 0.5, borderBottomColor: colors.border, paddingVertical: 15 }]} 
+            onPress={() => handleSocialShare(p.name)}
+          >
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: p.color, justifyContent: 'center', alignItems: 'center', marginRight: 15 }}>
+              <Ionicons name={p.icon} size={20} color="#FFF" />
+            </View>
+            <Text style={{ color: colors.text, fontSize: 16, flex: 1 }}>{p.name}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  </TouchableOpacity>
+</Modal>
     </View>
   );
 };
@@ -670,6 +850,47 @@ const styles = StyleSheet.create({
   joinBtn: { paddingHorizontal: 30, paddingVertical: 15, borderRadius: 25, width: '100%', alignItems: 'center' },
   joinBtnText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
   stripeInfoRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
+  liveBtn: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 20,
+  shadowColor: '#EF4444',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.3,
+  shadowRadius: 4,
+  elevation: 3,
+},// Add these inside your StyleSheet.create
+liveBtn: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#EF4444', // Red for Live
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  borderRadius: 20,
+  marginRight: 8,
+  // Optional shadow for depth
+  elevation: 3,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.2,
+},
+liveBtnText: {
+  color: '#FFF',
+  fontWeight: 'bold',
+  fontSize: 12,
+  marginLeft: 4,
+},
+// Ensure your notifBtn doesn't have a fixed margin if it's pushing things around
+notifBtn: {
+  width: 40,
+  height: 40,
+  borderRadius: 20,
+  borderWidth: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
   stripeText: { fontSize: 12, color: '#94A3B8', fontWeight: '500' }
 });
 
