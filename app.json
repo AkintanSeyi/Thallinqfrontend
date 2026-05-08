@@ -2,7 +2,7 @@
   "expo": {
     "name": "ThaLinq",
     "slug": "ThaLinq",
-    "version": "1.0.6",
+    "version": "1.0.10",
     "orientation": "portrait",
     "icon": "./assets/ThaLinq.jpg",
     "userInterfaceStyle": "automatic",
@@ -83,7 +83,8 @@
           "photosPermission": "Allow ThaLinq to access your photos.",
           "cameraPermission": "Allow ThaLinq to access your camera."
         }
-      ]
+      ],
+      "expo-video"
     ],
     "extra": {
       "eas": {

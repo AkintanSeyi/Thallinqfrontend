@@ -19,8 +19,8 @@ import { io } from 'socket.io-client';
 import * as ImagePicker from 'expo-image-picker'; // Required: npx expo install expo-image-picker
 import * as api from '../../../../api/index';
 
-const SOCKET_URL = "https://tlbackend.onrender.com"; 
-
+const SOCKET_URL = "https://tlbackend-n05n.onrender.com"; 
+   
 const Messages = ({ route, navigation }) => {
   const { conversationId, currentUserId, name } = route.params || {};
   

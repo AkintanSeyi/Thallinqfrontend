@@ -9,10 +9,14 @@ import Editprofile from './Profilepages.jsx/Editprofile';
 import GroupsUserBelong from './Profilepages.jsx/GroupsUserBelong';
 import GroupDetail from './Homepagestack/GroupDetail';
 import Viewuserdetails from './Homepagestack/Viewuserdetails';
-import Postingroup from './Homepagestack/Postingroup';
+import Postingroup from './Postingroup';
 import Messages from './Conversationstack/Messages';
 import EditGroup from './Homepagestack/EditGroup';
 import Adminview from './Homepagestack/Adminview';
+import MomentDetail from "./MomentDetail"
+
+import Profileview from './Profileview';
+import Settingshow from './Profilepages.jsx/Settingshow';
 
 
 const Stack = createStackNavigator();
@@ -20,10 +24,20 @@ const Stack = createStackNavigator();
 const ProfileStack = ({setIsLoggedIn}) => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-   
+ 
         <Stack.Screen name="ProfileMain">
-        {(props) => <ProfilePage {...props} setIsLoggedIn={setIsLoggedIn} />}
+        {(props) => <Profileview {...props} setIsLoggedIn={setIsLoggedIn} />}
       </Stack.Screen>
+       <Stack.Screen name="Profileview">
+        {(props) => <Profileview {...props} setIsLoggedIn={setIsLoggedIn} />}
+      </Stack.Screen>
+          <Stack.Screen name="Settings" >
+        {(props) => <Settingshow {...props} setIsLoggedIn={setIsLoggedIn} />}
+          </Stack.Screen>
+
+
+
+
       <Stack.Screen name="PersonalInfo" component={PersonalInfo} />
         <Stack.Screen name="Notification" component={Notification} />
 
@@ -38,8 +52,11 @@ const ProfileStack = ({setIsLoggedIn}) => {
                             <Stack.Screen name="Postingroup" component={Postingroup} />
    <Stack.Screen name="Message" component={Messages} />
    <Stack.Screen name="EditGroup" component={EditGroup} />
+ 
            <Stack.Screen name="Adminview" component={Adminview} />
-       
+              
+           <Stack.Screen name="MomentDetail" component={MomentDetail} />
+            <Stack.Screen name="Settings" component={Settingshow} />
       {/* Add Notifications or Privacy screens here later */}
     </Stack.Navigator>
   );

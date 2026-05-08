@@ -7,20 +7,23 @@ import {
   Image, 
   TouchableOpacity, 
   Dimensions, 
-  StatusBar,
+  StatusBar,  
   ActivityIndicator,  
-  RefreshControl,
+  RefreshControl,  
   Alert,
   Modal,
   Linking,
   TextInput,
   KeyboardAvoidingView,
-  Platform,
+  Platform, 
   Share
 } from 'react-native';
 import { useNavigation, useTheme } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { jwtDecode } from "jwt-decode";
+import { Video, ResizeMode } from 'expo-av';
+import * as Clipboard from 'expo-clipboard';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { jwtDecode } from "jwt-decode";  
 import * as Notifications from "expo-notifications";
 import * as Device from 'expo-device';
 import Constants from "expo-constants";
@@ -168,7 +171,7 @@ const onShare = async () => {
   };
 
 
-const PostItem = memo(({ item, userId, colors, onLike, onMenu, onNavigate, onOpenComments }) => {
+const PostItem = memo(({ item, userId, colors, onLike, onMenu , onNavigate, onOpenComments, onBookmark, isBookmarked }) => {
   const isLiked = item.likes?.includes(userId);
   const [shareModalVisible, setShareModalVisible] = useState(false);
 
@@ -194,8 +197,12 @@ const PostItem = memo(({ item, userId, colors, onLike, onMenu, onNavigate, onOpe
         url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`; 
         break;
       case 'Copy Link':
-        
-        Alert.alert("Link Copied", "Group link copied to clipboard!");
+        try {
+          await Clipboard.setStringAsync(shareUrl); 
+          Alert.alert("Success", "Link copied to clipboard!");
+        } catch (err) {
+          Alert.alert("Error", "Failed to copy link");
+        }
         setShareModalVisible(false);
         return;
     }
@@ -207,7 +214,6 @@ const PostItem = memo(({ item, userId, colors, onLike, onMenu, onNavigate, onOpe
       if (supported) {
         await Linking.openURL(url);
       } else {
-        // Fallback to browser
         const browserUrl = (platform === 'Facebook' || platform === 'LinkedIn' || platform === 'X') 
           ? url 
           : `https://www.google.com/search?q=${platform}`;
@@ -245,7 +251,7 @@ const PostItem = memo(({ item, userId, colors, onLike, onMenu, onNavigate, onOpe
       </TouchableOpacity>
 
       {/* ACTION BAR */}
-      <View style={styles.actionBar}>
+      <View style={[styles.actionBar, { justifyContent: 'space-between' }]}>
         <View style={styles.actionLeft}>
           <TouchableOpacity onPress={() => onLike(item._id)}>
             <Ionicons 
@@ -262,6 +268,15 @@ const PostItem = memo(({ item, userId, colors, onLike, onMenu, onNavigate, onOpe
             <Ionicons name="paper-plane-outline" size={24} color={colors.text} style={styles.icon} />
           </TouchableOpacity>
         </View>
+
+        {/* BOOKMARK BUTTON - ADDED HERE */}
+        <TouchableOpacity onPress={() => onBookmark(item._id)}>
+          <Ionicons 
+            name={isBookmarked ? "bookmark" : "bookmark-outline"} 
+            size={24} 
+            color={isBookmarked ? "#6366F1" : colors.text} 
+          />
+        </TouchableOpacity>
       </View>
 
       {/* FOOTER */}
@@ -297,7 +312,6 @@ const PostItem = memo(({ item, userId, colors, onLike, onMenu, onNavigate, onOpe
               Check out "{item.name}" on ThaLinq! 
             </Text>
 
-            {/* Added ScrollView wrapper for better spacing/scrolling if list grows */}
             <FlatList
               data={[
                 { name: 'Facebook', icon: 'logo-facebook', color: '#1877F2' },
@@ -309,7 +323,7 @@ const PostItem = memo(({ item, userId, colors, onLike, onMenu, onNavigate, onOpe
               ]}
               keyExtractor={(p) => p.name}
               style={{ width: '100%' }}
-              contentContainerStyle={{ paddingBottom: 40 }} // THIS ADDS THE SPACE AT THE BOTTOM
+              contentContainerStyle={{ paddingBottom: 40 }}
               renderItem={({ item: p }) => (
                 <TouchableOpacity 
                   style={styles.platformRow} 
@@ -319,7 +333,179 @@ const PostItem = memo(({ item, userId, colors, onLike, onMenu, onNavigate, onOpe
                     <Ionicons name={p.icon} size={20} color="#FFF" />
                   </View>
                   <Text style={[styles.platformName, { color: colors.text }]}>{p.name}</Text>
-                 
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+});
+
+const MomentItem = memo(({ item, userId, colors, onLike, onMenu, isVisible , onOpenComments, onBookmark, isBookmarked }) => {
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+ 
+ const player = useVideoPlayer(item.mediaUrl, (player) => {
+  player.loop = true;
+  // Change this: Only play if the item is actually visible initially
+  // player.play(); // Remove this line from here
+});
+
+// Update the useEffect to handle the play/pause logic more robustly
+useEffect(() => {
+  if (item.mediaType === 'video' && player) {
+    if (isVisible) {
+      player.play();
+    } else {
+      player.pause();
+    }
+  }
+}, [isVisible, player, item.mediaType]); 
+
+  // Logic to check if user liked the moment
+  const isLiked = item.likes?.some(id => id.toString() === userId?.toString());
+
+  const handleSocialShare = async (platform) => {
+    const shareMessage = `Check out this moment by ${item.author?.name} on ThaLinq!`;
+    const shareUrl = `https://thalinq.com/moment/${item._id}`;
+    let url = '';
+    
+    switch(platform) {
+      case 'Facebook': url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`; break;
+      case 'X': url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareMessage)}&url=${encodeURIComponent(shareUrl)}`; break;
+      case 'LinkedIn': url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`; break;
+      case 'Copy Link':
+        try { 
+          await Clipboard.setStringAsync(shareUrl); 
+          Alert.alert("Success", "Link copied!"); 
+        } catch (err) { 
+          Alert.alert("Error", "Failed to copy"); 
+        }
+        setShareModalVisible(false); 
+        return;
+      default: 
+        url = Platform.OS === 'ios' ? `${platform.toLowerCase()}://` : `https://www.google.com/search?q=${platform}`;
+    }
+
+    try {
+      const supported = await Linking.canOpenURL(url);
+      await Linking.openURL(supported ? url : (url.includes('http') ? url : `https://www.google.com/search?q=${platform}`));
+    } catch (error) { 
+      Alert.alert("Error", "Could not open app."); 
+    }
+    setShareModalVisible(false);
+  };
+
+  return (
+    <View style={[styles.card, { backgroundColor: colors.card }]}>
+      {/* HEADER */}
+      <View style={styles.cardHeader}>
+        <View style={styles.headerLeft}>
+          <Image source={{ uri: item.author?.profileImage || 'https://via.placeholder.com/150' }} style={styles.avatarSmall} />
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', maxWidth: '90%' }}>
+              <Text style={[styles.userNameText, { color: colors.text }]}>{item.author?.name}</Text>
+              {item.feeling?.name && <Text style={styles.feelingText}> — is {item.feeling.emoji} {item.feeling.name}</Text>}
+            </View>
+            <Text style={styles.categoryText}>Moment</Text>
+          </View>
+        </View>
+        <TouchableOpacity onPress={() => onMenu(item)}>
+          <Ionicons name="ellipsis-vertical" size={18} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
+     
+
+     <View style={styles.mediaContainer}>
+        {item.mediaType === 'video' ? (
+          <VideoView
+            player={player}
+            style={styles.mainImage}
+            contentFit="cover" // This replaces ResizeMode.COVER
+            allowsFullscreen
+            allowsPictureInPicture
+            showsPlaybackControls={true} // This replaces useNativeControls
+          />
+        ) : (
+          <Image 
+            source={{ uri: item.mediaUrl }} 
+            style={styles.mainImage} 
+            resizeMode="cover" 
+          />
+        )}
+      </View>
+
+
+      {/* ACTIONS */}
+      <View style={styles.actionBar}>
+        <View style={[styles.actionLeft, { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+          <View style={{ flexDirection: 'row' }}>
+            <TouchableOpacity onPress={() => onLike(item._id)}>
+              <Ionicons name={isLiked ? "heart" : "heart-outline"} size={28} color={isLiked ? "#EF4444" : colors.text} style={styles.icon} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => onOpenComments(item)}>
+              <Ionicons name="chatbubble-outline" size={24} color={colors.text} style={styles.icon} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShareModalVisible(true)}>
+              <Ionicons name="paper-plane-outline" size={24} color={colors.text} style={styles.icon} />
+            </TouchableOpacity>
+          </View>
+
+          {/* ADDED BOOKMARK ICON HERE */}
+          <TouchableOpacity onPress={() => onBookmark(item._id)}>
+            <Ionicons 
+              name={isBookmarked ? "bookmark" : "bookmark-outline"} 
+              size={24} 
+              color={isBookmarked ? "#6366F1" : colors.text} 
+              style={styles.icon}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* FOOTER */}
+      <View style={styles.cardFooter}>
+        {item.caption && (
+          <Text style={[styles.captionText, { color: colors.text }]}>
+            <Text style={{ fontWeight: 'bold' }}>{item.author?.name} </Text>{item.caption}
+          </Text>
+        )}
+        <Text style={styles.memberCount}>{item.likes?.length || 0} likes • {item.comments?.length || 0} comments</Text>
+      </View>
+
+      {/* SHARE MODAL */}
+      <Modal animationType="slide" transparent={true} visible={shareModalVisible} onRequestClose={() => setShareModalVisible(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShareModalVisible(false)}>
+          <View style={[styles.shareModalContent, { backgroundColor: colors.card }]}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setShareModalVisible(false)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Share Moment</Text>
+              <View style={{ width: 24 }} />
+            </View>
+           {item.mediaType === 'video' ? (
+  <View style={[styles.sharePreviewImage, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+    <Ionicons name="videocam" size={30} color="#FFF" />
+  </View>
+) : (
+  <Image source={{ uri: item.mediaUrl }} style={styles.sharePreviewImage} />
+)}
+            <FlatList
+              data={[
+                { name: 'Facebook', icon: 'logo-facebook', color: '#1877F2' },
+                { name: 'TikTok', icon: 'logo-tiktok', color: '#000000' },
+                { name: 'Instagram', icon: 'logo-instagram', color: '#E1306C' },
+                { name: 'X', icon: 'logo-twitter', color: '#000000' },
+                { name: 'LinkedIn', icon: 'logo-linkedin', color: '#0077B5' },
+                { name: 'Copy Link', icon: 'link-outline', color: '#64748B' }
+              ]}
+              keyExtractor={(p) => p.name}
+              contentContainerStyle={{ paddingBottom: 40 }}
+              renderItem={({ item: p }) => (
+                <TouchableOpacity style={styles.platformRow} onPress={() => handleSocialShare(p.name)}>
+                  <View style={[styles.platformIcon, { backgroundColor: p.color }]}><Ionicons name={p.icon} size={20} color="#FFF" /></View>
+                  <Text style={[styles.platformName, { color: colors.text }]}>{p.name}</Text>
                 </TouchableOpacity>
               )}
             />
@@ -331,10 +517,8 @@ const PostItem = memo(({ item, userId, colors, onLike, onMenu, onNavigate, onOpe
 });
 
 
-
-
 const StoryBar = ({ colors }) => (
-  <FlatList
+  <FlatList  
     horizontal
     showsHorizontalScrollIndicator={false}
     data={DUMMY_STORIES}
@@ -357,55 +541,50 @@ const StoryBar = ({ colors }) => (
   />
 );
 
-const LiveGroupsBar = ({ groups, colors, navigation, currentUserId }) => {
-  if (groups.length === 0) return null; // Hide the bar if no groups are live
-
-  const handleJoinLive = async (groupId) => {
-    try {
-      const response = await api.joinGroupLive(groupId); // Reuse your join logic
-      if (response.data.success) {
-        navigation.navigate("LiveStream", { 
-          groupId,
-          token: response.data.token,
-          channelName: response.data.channelName,
-          uid: response.data.uid,
-          role: 'audience',
-          currentUserId: currentUserId
-        });
-      }
-    } catch (error) {
-      Alert.alert("Error", "This live stream might have ended.");
-    }
-  };
-
+const LiveGroupsBar = ({ groups, colors, currentTab, setCurrentTab }) => {
   return (
-    <View style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}>
-      <Text style={{ marginLeft: 15, marginTop: 10, fontWeight: 'bold', color: '#314ce4' }}>
-        LIVE NOW
-      </Text>
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={groups}
-        keyExtractor={(item) => item._id}
-        contentContainerStyle={{ paddingHorizontal: 15, paddingVertical: 10 }}
-        renderItem={({ item }) => (
+    <View style={{ borderBottomWidth: 0.5, borderBottomColor: colors.border, paddingBottom: 10 }}>
+      {/* Segmented Tab Switcher */}
+      <View style={styles.tabWrapper}>
+        <View style={[styles.tabContainer, { backgroundColor: colors.border + '40' }]}>
           <TouchableOpacity 
-            style={styles.storyContainer} 
-            onPress={() => handleJoinLive(item._id)}
+            style={[styles.tabButton, currentTab === 'Groups' && { backgroundColor: '#6366F1' }]} 
+            onPress={() => setCurrentTab('Groups')}
           >
-            <View style={[styles.storyRing, { borderColor: '#314ce4', borderWidth: 2 }]}> 
-              <Image source={{ uri: item.profilePicture }} style={styles.storyImage} />
-              <View style={styles.liveBadgeSmall}>
-                 <Text style={styles.liveBadgeText}>LIVE</Text>
-              </View>
-            </View>
-            <Text numberOfLines={1} style={[styles.storyName, { color: colors.text }]}>
-              {item.name}
-            </Text>
+            <Text style={[styles.tabText, { color: currentTab === 'Groups' ? '#FFF' : colors.text }]}>Groups</Text>
           </TouchableOpacity>
-        )}
-      />
+
+          <TouchableOpacity 
+            style={[styles.tabButton, currentTab === 'Moments' && { backgroundColor: '#6366F1' }]} 
+            onPress={() => setCurrentTab('Moments')}
+          >
+            <Text style={[styles.tabText, { color: currentTab === 'Moments' ? '#FFF' : colors.text }]}>Moments</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Conditional "Live Now" Section - Only shows if on Groups tab and there are live groups */}
+      {currentTab === 'Groups' && groups.length > 0 && (
+        <View style={{ marginTop: 10 }}>
+          <Text style={styles.sectionTitle}>LIVE NOW</Text>
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={groups}
+            keyExtractor={(item) => `live-${item._id}`}
+            contentContainerStyle={{ paddingHorizontal: 15 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={styles.storyContainer}>
+                <View style={[styles.storyRing, { borderColor: '#EF4444', borderWidth: 2 }]}> 
+                  <Image source={{ uri: item.profilePicture }} style={styles.storyImage} />
+                  <View style={styles.liveBadgeSmall}><Text style={styles.liveBadgeText}>LIVE</Text></View>
+                </View>
+                <Text numberOfLines={1} style={[styles.storyName, { color: colors.text }]}>{item.name}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      )}
     </View>
   );
 };
@@ -424,9 +603,23 @@ export default function HomePage() {
   const [commentText, setCommentText] = useState("");
   const [liveGroups, setLiveGroups] = useState([]);
   const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [currentTab, setCurrentTab] = useState('Groups'); 
+const [moments, setMoments] = useState([]);
+const [savedGroups, setSavedGroups] = useState([]);
+const [viewableItems, setViewableItems] = useState([]);
+console.log(selectedPost)
  
 // Inside your HomePage component
 
+const fetchMoments = async (isRefreshingAction = false, currentId = userId) => {
+  try {
+    const response = await api.getLatestMoments(currentId); // You'll need this API endpoint
+    if (response.data.success) {
+      // Filter out moments from users the current user has blocked
+      setMoments(response.data.moments);
+    }
+  } catch (e) { console.error("Moments Error:", e); }
+};
 const setupNotifications = async (currentUserId) => {
   if (!currentUserId || typeof currentUserId !== 'string') {
      console.error("CRITICAL: currentUserId is invalid:", currentUserId);
@@ -473,6 +666,15 @@ const setupNotifications = async (currentUserId) => {
   }
 };
 
+const onViewableItemsChanged = React.useRef(({ viewableItems: visible }) => {
+  // Extract the IDs of items currently on screen
+  setViewableItems(visible.map(v => v.item._id));
+}).current;
+
+const viewabilityConfig = React.useRef({
+  itemVisiblePercentThreshold: 50, // Play when 50% of the video is visible
+}).current;
+
 useEffect(() => {
   const loadData = async () => {
     // We get the ID from the token first
@@ -482,6 +684,7 @@ useEffect(() => {
       // These run in parallel to keep the app fast
       fetchGroups(false, id);
       fetchLiveGroups(id);
+      fetchMoments(id);
       
       // We wait a tiny bit (1.5 seconds) before showing the alert 
       // so the user isn't spammed immediately upon opening the app
@@ -568,17 +771,59 @@ useEffect(() => {
     });
   }, [userId]);
 
+  // const handleAddComment = async () => {
+  //   if (!commentText.trim()) return;
+  //   try {
+  //     const res = await api.commentOnGroup({ postId: selectedPost._id, userId: userId, text: commentText });
+  //     if (res.data.success) {
+  //       setGroups(prev => prev.map(g => g._id === selectedPost._id ? res.data.post : g));
+  //       setSelectedPost(res.data.post);
+  //       setCommentText("");
+  //     }
+  //   } catch (err) { Alert.alert("Error", "Could not post comment"); }
+  // };
+
   const handleAddComment = async () => {
-    if (!commentText.trim()) return;
-    try {
-      const res = await api.commentOnGroup({ postId: selectedPost._id, userId: userId, text: commentText });
-      if (res.data.success) {
-        setGroups(prev => prev.map(g => g._id === selectedPost._id ? res.data.post : g));
-        setSelectedPost(res.data.post);
-        setCommentText("");
+  if (!commentText.trim()) return;
+  try {
+    const isMoment = currentTab === 'Moments';
+    const res = isMoment 
+      ? await api.commentOnMoment({ momentId: selectedPost._id, userId, text: commentText })
+      : await api.commentOnGroup({ postId: selectedPost._id, userId, text: commentText });
+
+    if (res.data.success) {
+      const updatedItem = isMoment ? res.data.moment : res.data.post;
+      
+      // Update the specific list
+      if (isMoment) {
+        setMoments(prev => prev.map(m => m._id === selectedPost._id ? updatedItem : m));
+      } else {
+        setGroups(prev => prev.map(g => g._id === selectedPost._id ? updatedItem : g));
       }
-    } catch (err) { Alert.alert("Error", "Could not post comment"); }
-  };
+      
+      setSelectedPost(updatedItem);
+      setCommentText("");
+    }
+  } catch (err) { Alert.alert("Error", "Could not post comment"); }
+};
+
+const handleToggleLike = useCallback(async (id) => {
+  checkAuth(async () => {
+    try {
+      const isMoment = currentTab === 'Moments';
+      const response = isMoment ? await api.likeMoment(id, userId) : await api.likeGroup(id, userId);
+
+      if (response.data.success) {
+        if (isMoment) {
+          setMoments(prev => prev.map(m => m._id === id ? { ...m, likes: response.data.likes } : m));
+        } else {
+          setGroups(prev => prev.map(g => g._id === id ? { ...g, likes: response.data.likes } : g));
+        }
+      }
+    } catch (e) { console.log("Like Error:", e); }
+  });
+}, [userId, currentTab]);
+
 
   const handleDeleteComment = async (commentId) => {
     try {
@@ -620,29 +865,73 @@ useEffect(() => {
     });
   }, [userId]);
 
-  const handleBlockUser = async (targetUserId) => {
-    try {
-      const res = await api.blockUser({ currentUserId: userId, blockUserId: targetUserId });
-      if (res.data.success) {
-        setGroups(prev => prev.filter(g => String(g.creator?._id || g.creator) !== String(targetUserId)));
-        if (commentModalVisible) setCommentModalVisible(false);
-        Alert.alert("Blocked", "Content removed.");
-      }
-    } catch (e) { Alert.alert("Error", "Action failed."); }
-  };
+const handleBlockUser = async (targetUserId) => {
+  try {
+    const res = await api.blockUser({ currentUserId: userId, blockUserId: targetUserId });
+    if (res.data.success) {
+      // 1. Remove from Groups list
+      setGroups(prev => prev.filter(g => 
+        String(g.creator?._id || g.creator) !== String(targetUserId)
+      ));
+      
+      // 2. NEW: Remove from Moments list
+      setMoments(prev => prev.filter(m => 
+        String(m.author?._id || m.author) !== String(targetUserId)
+      ));
 
-  const handleOpenMenu = useCallback((item) => {
-    checkAuth(() => {
-      const creatorId = item.creator?._id || item.creator;
-      if (String(creatorId) === String(userId)) return;
+      if (commentModalVisible) setCommentModalVisible(false);
+      Alert.alert("Blocked", "Content removed from your feed.");
+    }
+  } catch (e) { 
+    Alert.alert("Error", "Action failed."); 
+  }
+};
+const handleBookmark = async (itemId) => {
+  try {
+    // Determine type based on your active tab
+    const itemType = currentTab === 'Moments' ? 'moment' : 'group';
+    
+    const res = await api.toggleBookmark(userId, itemId, itemType);
+    
+    if (res.data.success) {
+      setSavedGroups(prev => 
+        prev.includes(itemId) 
+          ? prev.filter(id => id !== itemId) 
+          : [...prev, itemId]
+      );
+    }
+  } catch (e) {
+    Alert.alert("Error", "Could not update bookmarks");
+  }
+};
 
-      Alert.alert("Options", "Select action", [
-        { text: "Report / Flag", onPress: () => Alert.alert("Received", "We will review this.") },
-        { text: "Block User", style: "destructive", onPress: () => handleBlockUser(creatorId) },
-        { text: "Cancel", style: "cancel" }
-      ]);
-    });
-  }, [userId]);
+const handleOpenMenu = useCallback((item) => {
+  checkAuth(() => {
+    // Check item.creator (Groups) OR item.author (Moments)
+    const creatorId = item.creator?._id || item.creator || item.author?._id || item.author;
+    
+    if (String(creatorId) === String(userId)) return;
+
+    Alert.alert("Options", "Select action", [
+      { text: "Report / Flag", onPress: () => Alert.alert("Received", "We will review this.") },
+      { 
+        text: "Block User", 
+        style: "destructive", 
+        onPress: () => {
+          Alert.alert(
+            "Block User?",
+            "You won't see their posts or moments anymore.",
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Block", style: "destructive", onPress: () => handleBlockUser(creatorId) }
+            ]
+          );
+        } 
+      },
+      { text: "Cancel", style: "cancel" }
+    ]);
+  });
+}, [userId]);
 
   const handleNavigate = useCallback((id) => {
     checkAuth(() => {
@@ -660,6 +949,48 @@ useEffect(() => {
     console.error("Live Groups Error:", e);
   }
 };
+
+const fetchAllData = async (id) => {
+  setLoading(true);
+  await Promise.all([
+    fetchGroups(false, id),
+    fetchMoments(false, id),
+    fetchLiveGroups(id)
+  ]);
+  setLoading(false);
+};
+// --- MOMENT LIKE HANDLER ---
+const handleLikeMoment = useCallback(async (momentId) => {
+  checkAuth(async () => {
+    try {
+      const response = await api.likeMoment(momentId, userId);
+      if (response.data.success) {
+        setMoments(prev => prev.map(m => 
+          m._id === momentId ? { ...m, likes: response.data.likes } : m
+        ));
+      }
+    } catch (e) { console.log("Like Moment Error:", e); }
+  });
+}, [userId]);
+
+// --- MOMENT COMMENT HANDLER ---
+const handleAddMomentComment = async () => {
+  if (!commentText.trim()) return;
+  try {
+    // API: export const commentOnMoment = (data) => ...
+    const res = await api.commentOnMoment({ 
+      momentId: selectedPost._id, 
+      userId: userId, 
+      text: commentText 
+    });
+    if (res.data.success) {
+      setMoments(prev => prev.map(m => m._id === selectedPost._id ? res.data.moment : m));
+      setSelectedPost(res.data.moment);
+      setCommentText("");
+    }
+  } catch (err) { Alert.alert("Error", "Could not post comment"); }
+};
+
 
 const handleSocialShare = (platform) => {
   const shareMessage = encodeURIComponent(`Check out this group: ${item.name} on ThaLinq!`);
@@ -686,11 +1017,29 @@ useEffect(() => {
   loadData();
 }, []);
 
-  const renderItem = ({ item }) => {
+ const renderItem = ({ item }) => {
+    // 1. Handle Sponsored Ads
     if (item.isAd) {
       return <AdItem item={item} colors={colors} />;
     }
 
+    // 2. Handle Moments Tab
+    if (currentTab === 'Moments') {
+      return (
+        <MomentItem 
+          item={item} 
+          userId={userId} 
+          colors={colors} 
+          onLike={handleLikeMoment} 
+          onMenu={handleOpenMenu} 
+          onOpenComments={openComments} 
+          onBookmark={handleBookmark} // <--- PASS THIS
+      isBookmarked={savedGroups.includes(item._id)} // <--- PASS THIS
+        />
+      );
+    }
+
+    // 3. Handle Groups Tab (with Bookmark logic)
     return (
       <PostItem 
         item={item} 
@@ -700,6 +1049,8 @@ useEffect(() => {
         onMenu={handleOpenMenu} 
         onNavigate={handleNavigate}
         onOpenComments={openComments}
+        onBookmark={handleBookmark} // PASSING THE NEW PROP
+        isBookmarked={savedGroups.includes(item._id)} // PASSING THE NEW PROP
       />
     );
   };
@@ -721,16 +1072,46 @@ useEffect(() => {
       {loading ? (
         <ActivityIndicator style={{ marginTop: 50 }} size="large" color="#6366F1" />
       ) : (
-       <FlatList
- data={groups}
-  renderItem={renderItem}
+      <FlatList
+  data={currentTab === 'Groups' ? groups : moments}
+  onViewableItemsChanged={onViewableItemsChanged} // Add this
+  viewabilityConfig={viewabilityConfig}
+  renderItem={({ item }) => {
+    if (item.isAd) return <AdItem item={item} colors={colors} />;
+    
+    return currentTab === 'Moments' ? (
+      <MomentItem 
+        item={item} 
+        userId={userId} 
+        colors={colors} 
+     onLike={() => handleToggleLike(item._id)}
+        onMenu={handleOpenMenu} 
+        onOpenComments={openComments}
+        onBookmark={handleBookmark} // <--- PASS THIS
+      isBookmarked={savedGroups.includes(item._id)} // <--- PASS THIS
+      isVisible={viewableItems.includes(item._id)}
+      />
+    ) : (
+      <PostItem 
+        item={item} 
+        userId={userId} 
+        colors={colors} 
+        onLike={handleLike} 
+        onMenu={handleOpenMenu} 
+        onNavigate={handleNavigate}
+        onOpenComments={openComments}
+        onBookmark={handleBookmark} // <--- This MUST be here
+        isBookmarked={savedGroups.includes(item._id)}
+      />
+    );
+  }}
   keyExtractor={(item) => item._id}
   ListHeaderComponent={
     <LiveGroupsBar 
       groups={liveGroups} 
       colors={colors} 
-      navigation={navigation} 
-      currentUserId={userId}
+      currentTab={currentTab} 
+      setCurrentTab={setCurrentTab}
     />
   }
   refreshControl={
@@ -738,10 +1119,12 @@ useEffect(() => {
       refreshing={refreshing} 
       onRefresh={() => {
         fetchGroups(true, userId);
-        fetchLiveGroups(userId); // Refresh live groups too
+        fetchMoments(true, userId); // Make sure both refresh
+        fetchLiveGroups(userId);
       }} 
     />
-  } contentContainerStyle={{ paddingBottom: 40 }}
+  } 
+  contentContainerStyle={{ paddingBottom: 40 }}
   removeClippedSubviews={true}
   maxToRenderPerBatch={10}
   windowSize={5}
@@ -818,10 +1201,16 @@ const styles = StyleSheet.create({
   avatarSmall: { width: 38, height: 38, borderRadius: 19, marginRight: 10 },
   userNameText: { fontWeight: '700', fontSize: 15 },
   categoryText: { color: '#6366F1', fontSize: 12, fontWeight: '500' },
-  mainImage: { 
-    width: '100%', 
-    height: (Dimensions.get('window').width - 30) * 1.35 
-  },
+ mainImage: {
+  width: '100%',
+  height: 400, // Do not use 'auto' or 100% inside a ScrollView/FlatList
+  backgroundColor: '#000', // If you see black, the player is there but the video isn't loading
+},
+mediaContainer: {
+  width: '100%',
+  minHeight: 300,
+  justifyContent: 'center',
+},
   actionBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15, paddingVertical: 12 },
   actionLeft: { flexDirection: 'row', alignItems: 'center' },
   icon: { marginRight: 15 },
@@ -1014,6 +1403,114 @@ publishBtnText: {
   color: '#FFF',
   fontSize: 18,
   fontWeight: 'bold',
+},
+tabContainer: {
+    flexDirection: 'row',
+    borderRadius: 20,
+    padding: 4,
+    width: '100%',
+    maxWidth: 300, // Keeps it small/centered
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#94A3B8',
+    marginLeft: 15,
+    marginBottom: 8,
+    letterSpacing: 1,
+  },
+  liveBadgeSmall: {
+    position: 'absolute',
+    bottom: -5,
+    alignSelf: 'center',
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 5,
+    borderRadius: 4,
+  },
+  liveBadgeText: {
+    color: '#FFF',
+    fontSize: 8,
+    fontWeight: 'bold',
+  },
+  storyRing: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 1.5,
+    padding: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  storyImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  shareModalContent: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  platformRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#cbd5e1',
+  },
+  platformIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  platformName: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  tabWrapper: {
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  feelingText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+    marginLeft: 4
+  },
+  actionBar: {
+  flexDirection: 'row',
+  justifyContent: 'space-between', // This pushes bookmark to the right
+  alignItems: 'center',
+  paddingHorizontal: 15,
+  paddingVertical: 10,
+},
+actionLeft: {
+  flexDirection: 'row',
+  alignItems: 'center',
+},
+icon: {
+  marginRight: 15,
 },
   commentUser: { fontWeight: '700', fontSize: 14 },
   inputRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' },

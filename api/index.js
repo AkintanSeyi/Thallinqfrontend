@@ -3,9 +3,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const axiosInstance = axios.create({
   // Use your production URL or your local IP for testing on physical devices
-  baseURL: "https://tlbackend.onrender.com",   //http://192.168.51.160:5000   //https://tlbackend.onrender.com
- 
-});
+  baseURL: "https://tlbackend-n05n.onrender.com",   //http://192.168.146.160:5000   //https://tlbackend.onrender.com
+}); // http://192.168.146.160:5000  https://tlbackend-n05n.onrender.com
 
 // Use async/await inside the interceptor for AsyncStorage
 axiosInstance.interceptors.request.use(
@@ -69,8 +68,8 @@ export const getGroups = (page, category, search, userId) => {
     }
   });
 };
-
-export const getUserProfile = (email) => axiosInstance.get(`/api/auth/user-profile/${email}`); 
+export const searchUsers = (query) => axiosInstance.get(`/api/auth/search-users?query=${query}`);
+export const getUserProfile = (email) => axiosInstance.get(`/api/auth/user-profile/user/${email}`); 
 export const getBlockedUsers = (email) => axiosInstance.get(`/api/blocked-users/${email}`);
 export const getGroupDetails = (id) => axiosInstance.get(`/api/group-details/${id}`);
 export const toggleMembership = (data) => axiosInstance.post(`/api/toggle-membership`, data);
@@ -80,6 +79,11 @@ export const blockUser = (data) => axiosInstance.post(`/api/block-user`, data);
 export const unblockUser = (data) => axiosInstance.post('/api/unblock-user', data);
 export const getMyMemberships = (email, page = 1) => 
   axiosInstance.get(`/api/user-memberships/${email}?page=${page}`);
+
+// api/index.js
+// Unified toggle for both groups and moments
+export const toggleBookmark = (userId, itemId, itemType) => 
+  axiosInstance.post(`/api/toggle-bookmark`, { userId, itemId, itemType });
 
 export const updatePrivacy = (data) => axiosInstance.put('/api/update-privacy', data);
 export const updateProfile = (formData) => axiosInstance.patch("/api/auth/edit-profile", formData, {
@@ -156,9 +160,35 @@ export const likeGroup = (groupId, userId) => axiosInstance.post(`/api/${groupId
 // Remove the extra /api if your axiosInstance already includes it
 export const commentOnGroup = ({ postId, userId, text }) => 
   axiosInstance.post(`/api/posthome/${postId}/comment`, { userId, text });
-
+export const toggleFollow = (userId, targetUserId) => 
+  axiosInstance.post(`/api/users/toggle-follow`, { userId, targetUserId });
 
 export const deletehomeComment = (postId, commentId, userId) => 
   axiosInstance.delete(`/api/posthome/${postId}/comment/${commentId}`, { 
     data: { userId } 
   });
+
+// Fetch the latest moments for the feed
+export const getLatestMoments = (userId) => axiosInstance.get(`/api/moments?userId=${userId}`);
+
+// Like a specific moment
+export const likeMoment = (momentId, userId) => axiosInstance.post(`/api/moments/${momentId}/like`, { userId });
+
+// Comment on a moment
+export const commentOnMoment = (data) => axiosInstance.post('/api/moments/comment', data);
+
+export const createMoment = (formData) => axiosInstance.post('/api/moments', formData, {
+    headers: {
+        'Content-Type': 'multipart/form-data',
+    },
+});
+
+// Change userId to email in the query string
+export const getMomentsByUser = (email ,  type = 'posts') => axiosInstance.get(`/api/moments/user?email=${email}&type=${type}`);
+// Change this in your api/index.js
+
+
+export const deleteMoment = (momentId) => axiosInstance.delete(`/api/moments/${momentId}`);
+
+
+export const getMomentById = (id) => axiosInstance.get(`/api/moments/${id}`);

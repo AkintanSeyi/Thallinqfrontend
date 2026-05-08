@@ -8,13 +8,16 @@ import GroupDetail from "./GroupDetail"; // Create this to show specific group i
 import Notification from "../Profilepages.jsx/Notification";
 import Viewuserdetails from "./Viewuserdetails";
 import EditProfile from "../Profilepages.jsx/Editprofile";
-import Postingroup from "./Postingroup";
+import Postingroup from "../Postingroup";
 import EditGroup from "./EditGroup";
 import Messages from "../Conversationstack/Messages";
 import Adminview from "./Adminview";
 import Joinstream from "./Joinstream";
+import Postmoments from "../Postmoments";
 import LiveStream from "./LiveStream";
 import Explorestreampage from "./Explorestreampage";
+import Profileview from "../Profileview";
+import Settingshow from "../Profilepages.jsx/Settingshow";
 
 const Stack = createStackNavigator();
 
@@ -23,7 +26,7 @@ const HomePageStack = ({ setIsLoggedIn }) => {
     <Stack.Navigator
       initialRouteName="HomeMain"
       screenOptions={{
-        headerShown: false,
+        headerShown: false, 
         gestureEnabled: true,
       }}
     >
@@ -40,7 +43,10 @@ const HomePageStack = ({ setIsLoggedIn }) => {
       <Stack.Screen name="Notification" component={Notification} />
       <Stack.Screen name="Joinstreams" component={Joinstream} />
       <Stack.Screen name="LiveStream" component={LiveStream} />
+         <Stack.Screen name="Postmoments" component={Postmoments} />
       <Stack.Screen name="Explorestreampage" component={Explorestreampage} />
+           <Stack.Screen name="Profileview" component={Profileview} />
+             <Stack.Screen name="Settingshow" component={Settingshow} />
     </Stack.Navigator>
   );
 };

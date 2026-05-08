@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useTheme, useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import * as api from '../../../../api/index'; 
+import * as api from '../../../api/index'; 
 
 const Postingroup = () => {
   const { colors, dark } = useTheme();

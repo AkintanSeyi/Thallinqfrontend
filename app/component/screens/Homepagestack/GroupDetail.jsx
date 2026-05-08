@@ -22,6 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, useTheme, useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { jwtDecode } from "jwt-decode";
+import * as Clipboard from 'expo-clipboard';
 
 import * as api from "../../../../api/index";
 
@@ -68,9 +69,14 @@ const handleSocialShare = async (platform) => {
     case 'Instagram': 
       url = Platform.OS === 'ios' ? 'instagram://' : 'https://www.instagram.com/'; 
       break;
-    case 'Copy Link':
-      // Requires: import * as Clipboard from 'expo-clipboard';
-      Alert.alert("Link Copied", "Group link copied to clipboard!");
+  case 'Copy Link':
+      try {
+        // This is the line that actually copies the link
+        await Clipboard.setStringAsync(shareUrl); 
+        Alert.alert("Link Copied", "Group link copied to clipboard!");
+      } catch (err) {
+        Alert.alert("Error", "Failed to copy link.");
+      }
       setShareModalVisible(false);
       return;
   }
@@ -616,7 +622,7 @@ const handleStartLive = async () => {
 {!isCreator && group?.isLive && (
   <TouchableOpacity 
     style={[styles.liveBtn, { backgroundColor: '#EF4444' }]} 
-    onPress={handleJoinLive} // Call the function instead of direct navigate
+    onPress={handleJoinLive} // Call the function instead of 
   >
     <Ionicons name="pulse" size={18} color="#FFF" />
     <Text style={styles.liveBtnText}>Join Live</Text>

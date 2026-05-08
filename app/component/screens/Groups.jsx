@@ -45,6 +45,10 @@ const Groups = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [userId, setUserId] = useState(null);
+  const [savedGroups, setSavedGroups] = useState([]);
+  const [searchMode, setSearchMode] = useState('Groups'); 
+  const [moments, setMoments] = useState([]);
+  const [users, setUsers] = useState([]);
 
   // --- COMMENT & MENU STATE ---
   const [commentModalVisible, setCommentModalVisible] = useState(false);
@@ -63,18 +67,72 @@ const Groups = () => {
     action();
   };
 
-  const fetchUserProfile = async () => {
+  const handleBookmark = async (groupId) => {
+  checkAuth(async () => {
     try {
-      const token = await AsyncStorage.getItem('token');
-      if (token) {
-        const decoded = jwtDecode(token);
-        const id = decoded.id || decoded.userId || decoded.sub;
-        setUserId(id);
-        return id;
+      // Optimistic Update
+      const isAlreadySaved = savedGroups.includes(groupId);
+      if (isAlreadySaved) {
+        setSavedGroups(prev => prev.filter(id => id !== groupId));
+      } else {
+        setSavedGroups(prev => [...prev, groupId]);
       }
-    } catch (e) { console.log("Guest mode active"); }
-    return null;
-  };
+
+      // API Call (itemType 'group' tells backend which array to use)
+      const res = await api.toggleBookmark(userId, groupId, 'group');
+      
+      if (!res.data.success) {
+        // Rollback if failed
+        if (isAlreadySaved) setSavedGroups(prev => [...prev, groupId]);
+        else setSavedGroups(prev => prev.filter(id => id !== groupId));
+      }
+    } catch (e) {
+      Alert.alert("Error", "Could not save group.");
+    }
+  });
+};
+
+
+
+const fetchSavedGroups = async (userEmail) => {
+  try {
+    // We use the email here because your backend route is /user-profile/:email
+    const res = await api.getUserProfile(userEmail); 
+    
+    if (res.data.success && res.data.user) {
+      // Check for both savedPosts (Groups) and savedMoments
+      const savedIds = [
+        ...(res.data.user.savedPosts || []),
+        ...(res.data.user.savedMoments || [])
+      ].map(p => p._id || p);
+      
+      setSavedGroups(savedIds);
+    }
+  } catch (e) { 
+    console.log("Error fetching bookmarks", e); 
+  }
+};
+
+const fetchUserProfile = async () => {
+  try {
+    const token = await AsyncStorage.getItem('token');
+    if (token) {
+      const decoded = jwtDecode(token);
+      const id = decoded.id || decoded.userId;
+      const email = decoded.email; // Ensure your JWT includes the email field
+      
+      setUserId(id);
+
+      if (email) {
+        fetchSavedGroups(email);
+      }
+      return id;
+    }
+  } catch (e) { 
+    console.log("Guest mode active"); 
+  }
+  return null;
+};
 
   const fetchGroups = async (pageNum, isNewSearch = false, categoryToUse = activeCategory) => {
     if (loading) return;
@@ -216,39 +274,63 @@ const Groups = () => {
     }, [route.params?.selectedCategory])
   );
 
-  useEffect(() => {
-    const delayDebounce = setTimeout(() => {
-      if (!isInitialLoading) {
-        setPage(1);
-        fetchGroups(1, true, activeCategory);
+useEffect(() => {
+  const delayDebounce = setTimeout(async () => {
+    if (isInitialLoading) return;
+
+    setPage(1); // Reset pagination on mode/search change
+
+    if (searchMode === 'Groups') {
+      fetchGroups(1, true, activeCategory);
+    } else {
+      // Path for Users
+      if (!searchQuery.trim()) {
+        setUsers([]); 
+        return;
       }
-    }, 500);
-    return () => clearTimeout(delayDebounce);
-  }, [searchQuery, activeCategory]);
+      setLoading(true);
+      try {
+        const res = await api.searchUsers(searchQuery);
+        if (res.data.success) {
+          setUsers(res.data.users);
+        }
+      } catch (e) {
+        console.error("User search failed", e);
+      } finally {
+        setLoading(false);
+      }
+    }
+  }, 500);
+
+  return () => clearTimeout(delayDebounce);
+}, [searchQuery, activeCategory, searchMode]);
 
   const renderGroupItem = ({ item }) => {
-    const isLiked = item.likes?.includes(userId);
-    return (
-      <View style={[styles.verticalCard, { backgroundColor: colors.card }]}>
-        <View style={styles.cardHeaderRow}>
-          <View style={{flexDirection: 'row', alignItems: 'center'}}>
-             <Image source={{ uri: item.profilePicture }} style={styles.miniAvatar} />
-             <View>
-               <Text style={[styles.groupName, { color: colors.text }]}>{item.name}</Text>
-               <Text style={styles.groupCategoryLabel}>{item.category}</Text>
-             </View>
+  const isLiked = item.likes?.includes(userId);
+  const isBookmarked = savedGroups.includes(item._id);
+
+  return (
+    <View style={[styles.verticalCard, { backgroundColor: colors.card }]}>
+      <View style={styles.cardHeaderRow}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Image source={{ uri: item.profilePicture }} style={styles.miniAvatar} />
+          <View>
+            <Text style={[styles.groupName, { color: colors.text }]}>{item.name}</Text>
+            <Text style={styles.groupCategoryLabel}>{item.category}</Text>
           </View>
-          <TouchableOpacity onPress={() => handleOpenMenu(item)}>
-            <Ionicons name="ellipsis-vertical" size={18} color={colors.text} />
-          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity onPress={() => checkAuth(() => navigation.navigate("GroupDetail", { id: item._id }))} activeOpacity={0.95}>
-          <Image source={{ uri: item.profilePicture }} style={styles.groupImage} />
+        <TouchableOpacity onPress={() => handleOpenMenu(item)}>
+          <Ionicons name="ellipsis-vertical" size={18} color={colors.text} />
         </TouchableOpacity>
+      </View>
 
-        <View style={styles.cardContent}>
-          <View style={styles.actionBar}>
+      <TouchableOpacity onPress={() => checkAuth(() => navigation.navigate("GroupDetail", { id: item._id }))} activeOpacity={0.95}>
+        <Image source={{ uri: item.profilePicture }} style={styles.groupImage} />
+      </TouchableOpacity>
+
+      <View style={styles.cardContent}>
+        <View style={styles.actionBar}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
             <View style={styles.leftActions}>
               <TouchableOpacity onPress={() => handleLike(item._id)} style={styles.actionButton}>
                 <Ionicons name={isLiked ? "heart" : "heart-outline"} size={26} color={isLiked ? "#EF4444" : colors.text} />
@@ -257,58 +339,169 @@ const Groups = () => {
                 <Ionicons name="chatbubble-outline" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
-          </View>
-          <View style={styles.statsRow}>
-             <Text style={[styles.memberCountText, { color: colors.text }]}>
-               {item.likes?.length || 0} likes • {item.comments?.length || 0} comments • {item.memberCount || 1} members
-             </Text>
+
+            {/* Bookmark Toggle */}
+            <TouchableOpacity onPress={() => handleBookmark(item._id)} style={styles.actionButton}>
+              <Ionicons 
+                name={isBookmarked ? "bookmark" : "bookmark-outline"} 
+                size={24} 
+                color={isBookmarked ? "#6366F1" : colors.text} 
+              />
+            </TouchableOpacity>
           </View>
         </View>
+
+        <View style={styles.statsRow}>
+           <Text style={[styles.memberCountText, { color: colors.text }]}>
+             {item.likes?.length || 0} likes • {item.comments?.length || 0} comments • {item.memberCount || 1} members
+           </Text>
+        </View>
       </View>
-    );
-  };
+    </View>
+  );
+};
+
+const renderUserItem = ({ item }) => (
+  <TouchableOpacity 
+    style={[styles.userItemContainer, { borderBottomColor: dark ? '#374151' : '#F1F5F9' }]}
+    // Changing to Profileview as requested
+    onPress={() => navigation.navigate("Profileview", { userEmail: item.email })}
+    activeOpacity={0.7}
+  >
+    <View style={styles.userAvatarWrapper}>
+      <Image 
+        // Fallback for different naming conventions
+        source={{ uri: item.profilePicture || item.profileImage || 'https://via.placeholder.com/150' }} 
+        style={styles.userAvatar} 
+      />
+    </View>
+    
+    <View style={styles.userInfo}>
+      <Text style={[styles.userNameText, { color: colors.text }]}>{item.name}</Text>
+      <Text style={styles.userBioText} numberOfLines={1}>
+        {item.bio || "No bio available"}
+      </Text>
+    </View>
+    
+    <View style={styles.userActionIcon}>
+       <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+    </View>
+  </TouchableOpacity>
+);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={dark ? "light-content" : "dark-content"} />
+    
+       
 
-      <FlatList
-        data={groups}
-        keyExtractor={(item) => item._id}
-        renderItem={renderGroupItem}
-        contentContainerStyle={styles.listPadding}
-        onEndReached={() => hasMore && !loading && fetchGroups(page + 1)}
-        onEndReachedThreshold={0.5}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); setPage(1); fetchGroups(1, true); }} />}
-        ListHeaderComponent={
-          <View style={[styles.headerContainer, { backgroundColor: colors.card }]}>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>Explore Groups</Text>
-            <View style={styles.searchSection}>
-              <TextInput
-                placeholder="Search groups..." 
-                placeholderTextColor={dark ? "#6B7280" : "#94A3B8"} 
-                style={[styles.searchInput, { backgroundColor: dark ? '#1F2937' : '#F3F4F6', color: colors.text }]}        
-                value={searchQuery} onChangeText={setSearchQuery}                                    
-              />                                                                                    
-            </View>
-            <View style={styles.filterWrapper}>
-              <FlatList
-                data={CATEGORIES} horizontal showsHorizontalScrollIndicator={false}
-                keyExtractor={(item) => item}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    onPress={() => setActiveCategory(item)}
-                    style={[styles.filterPill, { backgroundColor: dark ? '#374151' : '#E5E7EB' }, activeCategory === item && (dark ? styles.activePillDark : styles.activePillLight)]}
-                  >
-                    <Text style={[styles.pillText, activeCategory === item && styles.activePillText]}>{item}</Text>
-                  </TouchableOpacity>
-                )}
-              />
-            </View>
-          </View>
+<FlatList
+  // Dynamic data source
+  data={searchMode === 'Groups' ? groups : users}
+  keyExtractor={(item) => item._id} 
+  
+  // Dynamic render item
+  renderItem={searchMode === 'Groups' ? renderGroupItem : renderUserItem}
+  
+  contentContainerStyle={styles.listPadding}
+  
+  onEndReached={() => {
+    // Only paginate for Groups (unless your user API supports pagination)
+    if (searchMode === 'Groups' && hasMore && !loading) {
+      fetchGroups(page + 1);
+    }
+  }}
+  onEndReachedThreshold={0.5} 
+  
+  refreshControl={
+    <RefreshControl 
+      refreshing={isRefreshing} 
+      onRefresh={() => { 
+        setIsRefreshing(true); 
+        if (searchMode === 'Groups') {
+           setPage(1); 
+           fetchGroups(1, true); 
+        } else {
+           // If in user mode, just stop the spinner or re-trigger search
+           setIsRefreshing(false);
         }
-        ListEmptyComponent={isInitialLoading ? <ActivityIndicator size="large" color="#6366F1" style={{marginTop: 50}} /> : <Text style={styles.emptyText}>No groups found.</Text>}
-      />
+      }} 
+    />
+  }
+  ListHeaderComponent={
+    <View style={[styles.headerContainer, { backgroundColor: colors.card }]}>
+      <Text style={[styles.headerTitle, { color: colors.text }]}>Explore</Text>
+
+      {/* MODE SWITCHER */}
+      <View style={{ flexDirection: 'row', marginBottom: 15, paddingHorizontal: 5 }}>
+        {['Groups', 'Users'].map((mode) => (
+          <TouchableOpacity 
+            key={mode}
+            onPress={() => {
+              setSearchMode(mode);
+              setSearchQuery(''); // Clear search when switching modes
+              setPage(1);
+            }}
+            style={{
+              paddingVertical: 8,
+              paddingHorizontal: 20,
+              borderRadius: 20,
+              backgroundColor: searchMode === mode ? '#6366F1' : (dark ? '#374151' : '#E5E7EB'),
+              marginRight: 10
+            }}
+          >
+            <Text style={{ color: searchMode === mode ? '#FFF' : colors.text, fontWeight: 'bold' }}>{mode}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.searchSection}>
+        <TextInput
+          placeholder={`Search ${searchMode.toLowerCase()}...`}
+          placeholderTextColor={dark ? "#6B7280" : "#94A3B8"} 
+          style={[styles.searchInput, { backgroundColor: dark ? '#1F2937' : '#F3F4F6', color: colors.text }]}        
+          value={searchQuery} 
+          onChangeText={setSearchQuery}                                    
+        />                                    
+      </View>
+
+      {/* CATEGORIES - Hide when searching Users to save space */}
+      {searchMode === 'Groups' && (
+        <View style={styles.filterWrapper}>
+          <FlatList
+            data={CATEGORIES} 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                onPress={() => setActiveCategory(item)}
+                style={[
+                  styles.filterPill, 
+                  { backgroundColor: dark ? '#374151' : '#E5E7EB' }, 
+                  activeCategory === item && (dark ? styles.activePillDark : styles.activePillLight)
+                ]}
+              >
+                <Text style={[styles.pillText, activeCategory === item && styles.activePillText]}>{item}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      )}
+    </View>
+  }
+  ListEmptyComponent={
+    loading ? (
+      <ActivityIndicator size="large" color="#6366F1" style={{marginTop: 50}} />
+    ) : (
+      <View style={{ padding: 20, alignItems: 'center' }}>
+        <Text style={[styles.emptyText, { color: colors.text, opacity: 0.6 }]}>
+          No {searchMode.toLowerCase()} found for "{searchQuery}"
+        </Text>
+      </View>
+    )
+  }
+/>
 
       {/* COMMENT MODAL */}
       <Modal animationType="slide" transparent={true} visible={commentModalVisible} onRequestClose={() => setCommentModalVisible(false)}>
@@ -396,7 +589,50 @@ const styles = StyleSheet.create({
   commentUser: { fontWeight: 'bold', fontSize: 14 },
   inputRow: { flexDirection: 'row', alignItems: 'center', paddingTop: 10 },
   commentInput: { flex: 1, borderWidth: 1, borderRadius: 20, paddingHorizontal: 15, paddingVertical: 8, marginRight: 10 },
-  emptyText: { textAlign: 'center', marginTop: 50, fontSize: 16, color: '#94A3B8' }
+  emptyText: { textAlign: 'center', marginTop: 50, fontSize: 16, color: '#94A3B8' },
+  userItemContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    // Removed border/card look
+    backgroundColor: 'transparent', 
+  },
+  userAvatarWrapper: {
+    position: 'relative',
+  },
+  userAvatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#E5E7EB', // Placeholder color while loading
+  },
+  userInfo: {
+    flex: 1,
+    marginLeft: 15,
+    justifyContent: 'center',
+  },
+  userNameText: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
+    letterSpacing: -0.3,
+  },
+  userBioText: {
+    fontSize: 14,
+    color: '#94A3B8',
+    fontWeight: '400',
+  },
+  userActionIcon: {
+    paddingLeft: 10,
+  },
+  // Update your FlatList separator for Users
+  userSeparator: {
+    height: 1,
+    backgroundColor: '#F3F4F6', // Very light grey for light mode
+    marginLeft: 85, // Aligns separator with text, not the avatar
+    opacity: 0.5,
+  }
 });
 
 export default Groups;

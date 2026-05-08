@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -28,6 +28,9 @@ const ProfilePage = ({ setIsLoggedIn }) => {
 
   const [loading, setLoading] = useState(true);
   const [isGuest, setIsGuest] = useState(false);
+  const [activeTab, setActiveTab] = useState("Moments");
+ 
+  const [moments, setMoments] = useState([]);
   const [user, setUser] = useState({
     name: "",
     email: "",
@@ -56,6 +59,8 @@ const ProfilePage = ({ setIsLoggedIn }) => {
             email: userData.email,
             profileImage: userData.profileImage,
           });
+          // Fetch moments after profile is loaded
+          fetchUserMoments(userData.email);
         }
       } else {
         setIsGuest(true);
@@ -64,6 +69,44 @@ const ProfilePage = ({ setIsLoggedIn }) => {
       console.error("Error fetching profile:", e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteMoment = (momentId) => {
+    Alert.alert(
+      "Delete Moment",
+      "Are you sure you want to delete this moment forever?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const response = await api.deleteMoment(momentId);
+              if (response.data.success) {
+                // Locally update the UI so the moment disappears immediately
+                setMoments((prev) => prev.filter((m) => m._id !== momentId));
+              }
+            } catch (error) {
+              console.error("Delete Error:", error);
+              Alert.alert("Error", "Could not delete moment.");
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const fetchUserMoments = async (userEmail) => {
+    try {
+      console.log(userEmail);
+      const response = await api.getMomentsByUser(userEmail);
+      if (response.data.success) {
+        setMoments(response.data.moments || []);
+      }
+    } catch (error) {
+      console.error("Error fetching moments:", error);
     }
   };
 
@@ -101,6 +144,7 @@ const ProfilePage = ({ setIsLoggedIn }) => {
     Appearance.setColorScheme(nextScheme);
   };
 
+  // Internal component for Settings items
   const SettingItem = ({
     icon,
     title,
@@ -153,57 +197,6 @@ const ProfilePage = ({ setIsLoggedIn }) => {
     </TouchableOpacity>
   );
 
-  // --- GUEST VIEW COMPONENT ---
-  const GuestProfileView = () => (
-    <View style={styles.guestContainer}>
-      <View style={styles.guestHeaderCard}>
-        <View style={styles.guestAvatarPlaceholder}>
-          <Ionicons name="person" size={50} color="#CBD5E1" />
-        </View>
-        <Text style={[styles.guestTitle, { color: colors.text }]}>
-          Welcome, Guest
-        </Text>
-        <Text style={styles.guestSubtitle}>
-          Sign in to customize your profile, manage groups, and save your
-          preferences.
-        </Text>
-        <TouchableOpacity
-          style={styles.guestLoginBtn}
-          onPress={() => navigation.navigate("SignIn")}
-        >
-          <Text style={styles.guestLoginBtnText}>Log In / Sign Up</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Preferences
-        </Text>
-        <SettingItem
-          onPress={toggleTheme}
-          icon={dark ? "moon" : "sunny"}
-          title="Appearance"
-          subtitle={dark ? "Dark mode" : "Light mode"}
-          rightElement={
-            <View
-              style={[
-                styles.toggleTrack,
-                { backgroundColor: dark ? "#6366F1" : "#CBD5E1" },
-              ]}
-            >
-              <View
-                style={[
-                  styles.toggleKnob,
-                  { alignSelf: dark ? "flex-end" : "flex-start" },
-                ]}
-              />
-            </View>
-          }
-        />
-      </View>
-    </View>
-  );
-
   if (loading && !user.name && !isGuest) {
     return (
       <View
@@ -232,9 +225,25 @@ const ProfilePage = ({ setIsLoggedIn }) => {
         contentContainerStyle={{ paddingBottom: 40 }}
       >
         {isGuest ? (
-          <GuestProfileView />
+          <View style={styles.guestContainer}>
+            <View style={styles.guestHeaderCard}>
+              <View style={styles.guestAvatarPlaceholder}>
+                <Ionicons name="person" size={50} color="#CBD5E1" />
+              </View>
+              <Text style={[styles.guestTitle, { color: "#FFF" }]}>
+                Welcome, Guest
+              </Text>
+              <TouchableOpacity
+                style={styles.guestLoginBtn}
+                onPress={() => navigation.navigate("SignIn")}
+              >
+                <Text style={styles.guestLoginBtnText}>Log In / Sign Up</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         ) : (
           <>
+            {/* --- TOP PROFILE HEADER (RESTORED) --- */}
             <View
               style={[
                 styles.profileHeaderCard,
@@ -279,71 +288,166 @@ const ProfilePage = ({ setIsLoggedIn }) => {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Account
-              </Text>
-              <SettingItem
-                onPress={() => handleNavigate("MyGroups")}
-                icon="people-outline"
-                title="Groups"
-              />
-              <SettingItem
-                onPress={() => handleNavigate("PersonalInfo")}
-                icon="person-outline"
-                title="Personal Info"
-                subtitle="Manage your account data"
-              />
+            {/* --- TAB SWITCHER (MIDDLE) --- */}
+            <View
+              style={[
+                styles.tabBar,
+                { borderBottomColor: dark ? "#334155" : "#F1F5F9" },
+              ]}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.tabItem,
+                  activeTab === "Moments" && styles.activeTabItem,
+                ]}
+                onPress={() => setActiveTab("Moments")}
+              >
+                <Ionicons
+                  name="grid"
+                  size={20}
+                  color={activeTab === "Moments" ? "#6366F1" : "#94A3B8"}
+                />
+                <Text
+                  style={[
+                    styles.tabText,
+                    {
+                      color: activeTab === "Moments" ? colors.text : "#94A3B8",
+                    },
+                  ]}
+                >
+                  Moments
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.tabItem,
+                  activeTab === "Profile" && styles.activeTabItem,
+                ]}
+                onPress={() => setActiveTab("Profile")}
+              >
+                <Ionicons
+                  name="settings-outline"
+                  size={20}
+                  color={activeTab === "Profile" ? "#6366F1" : "#94A3B8"}
+                />
+                <Text
+                  style={[
+                    styles.tabText,
+                    {
+                      color: activeTab === "Profile" ? colors.text : "#94A3B8",
+                    },
+                  ]}
+                >
+                  Settings
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Preferences
-              </Text>
-              <SettingItem
-                onPress={toggleTheme}
-                icon={dark ? "moon" : "sunny"}
-                title="Appearance"
-                subtitle={dark ? "Dark mode is on" : "Light mode is on"}
-                rightElement={
-                  <View
-                    style={[
-                      styles.toggleTrack,
-                      { backgroundColor: dark ? "#6366F1" : "#CBD5E1" },
-                    ]}
-                  >
+            {/* --- CONDITIONAL CONTENT --- */}
+            {activeTab === "Moments" ? (
+              <View style={styles.gridContainer}>
+                {moments.length > 0 ? (
+                  <View style={styles.row}>
+                    {moments.map((item, index) => (
+                      <View key={item._id || index} style={styles.gridItem}>
+                        <TouchableOpacity
+                          style={{ flex: 1 }}
+                          onPress={() =>
+                            navigation.navigate("MomentDetail", {
+                              moment: item,
+                            })
+                          }
+                        >
+                          <Image
+                            source={{ uri: item.image }}
+                            style={styles.gridImage}
+                          />
+                        </TouchableOpacity>
+
+                        {/* TRASH ICON */}
+                        <TouchableOpacity
+                          style={styles.deleteBadge}
+                          onPress={() => handleDeleteMoment(item._id)}
+                        >
+                          <Ionicons name="trash" size={12} color="#FFF" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.emptyState}>
+                    <Ionicons name="images-outline" size={40} color="#94A3B8" />
+                    <Text style={{ color: "#94A3B8", marginTop: 10 }}>
+                      No moments yet
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                  Account
+                </Text>
+                <SettingItem
+                  onPress={() => handleNavigate("MyGroups")}
+                  icon="people-outline"
+                  title="Groups"
+                />
+                <SettingItem
+                  onPress={() => handleNavigate("PersonalInfo")}
+                  icon="person-outline"
+                  title="Personal Info"
+                />
+
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    { color: colors.text, marginTop: 20 },
+                  ]}
+                >
+                  Preferences
+                </Text>
+                <SettingItem
+                  onPress={toggleTheme}
+                  icon={dark ? "moon" : "sunny"}
+                  title="Appearance"
+                  rightElement={
                     <View
                       style={[
-                        styles.toggleKnob,
-                        { alignSelf: dark ? "flex-end" : "flex-start" },
+                        styles.toggleTrack,
+                        { backgroundColor: dark ? "#6366F1" : "#CBD5E1" },
                       ]}
-                    />
-                  </View>
-                }
-              />
-              <SettingItem
-                onPress={() => handleNavigate("Notification")}
-                icon="notifications-outline"
-                title="Notifications"
-              />
-              <SettingItem
-                onPress={() => handleNavigate("Privacy")}
-                icon="shield-checkmark-outline"
-                title="Privacy & Security"
-              />
-            </View>
+                    >
+                      <View
+                        style={[
+                          styles.toggleKnob,
+                          { alignSelf: dark ? "flex-end" : "flex-start" },
+                        ]}
+                      />
+                    </View>
+                  }
+                />
+                <SettingItem
+                  onPress={() => handleNavigate("Notification")}
+                  icon="notifications-outline"
+                  title="Notifications"
+                />
 
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Support
-              </Text>
-              <SettingItem
-                icon="log-out-outline"
-                title="Sign Out"
-                destructive
-                onPress={handleLogout}
-              />
-            </View>
+                {/* RESTORED ORIGINAL PATH: Security */}
+                <SettingItem
+                  onPress={() => handleNavigate("Privacy")}
+                  icon="shield-checkmark-outline"
+                  title="Privacy & Security"
+                />
+                <SettingItem
+                  icon="log-out-outline"
+                  title="Sign Out"
+                  destructive
+                  onPress={handleLogout}
+                />
+              </View>
+            )}
           </>
         )}
       </ScrollView>
@@ -411,7 +515,27 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
   editBtnText: { color: "#FFF", fontSize: 13, fontWeight: "700" },
-  section: { marginTop: 30, paddingHorizontal: 20 },
+  tabBar: { flexDirection: "row", borderBottomWidth: 1, marginTop: 10 },
+  tabItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 15,
+  },
+  activeTabItem: { borderBottomWidth: 2, borderBottomColor: "#6366F1" },
+  tabText: { marginLeft: 8, fontWeight: "700", fontSize: 14 },
+  gridContainer: { padding: 2 },
+  row: { flexDirection: "row", flexWrap: "wrap" },
+  gridItem: { width: "33.33%", aspectRatio: 1, padding: 2 },
+  gridImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 8,
+    backgroundColor: "#1E293B",
+  },
+  emptyState: { alignItems: "center", marginTop: 60 },
+  section: { marginTop: 10, paddingHorizontal: 20 },
   sectionTitle: { fontSize: 16, fontWeight: "800", marginBottom: 12 },
   settingItem: {
     flexDirection: "row",
@@ -429,7 +553,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 15,
   },
-  destructiveIcon: { backgroundColor: "#FEF2F2" },
   settingTextContainer: { flex: 1 },
   settingTitle: { fontSize: 15, fontWeight: "700" },
   destructiveText: { color: "#EF4444" },
@@ -447,8 +570,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#FFF",
   },
-
-  // Guest Styles
   guestContainer: { flex: 1, paddingHorizontal: 20, marginTop: 20 },
   guestHeaderCard: {
     padding: 30,
@@ -456,6 +577,22 @@ const styles = StyleSheet.create({
     backgroundColor: "#6366F1",
     alignItems: "center",
     marginBottom: 10,
+  },
+  deleteBadge: {
+    position: "absolute",
+    top: 5,
+    right: 5,
+    backgroundColor: "rgba(239, 68, 68, 0.8)", // Semi-transparent Red
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1,
   },
   guestAvatarPlaceholder: {
     width: 100,
@@ -466,18 +603,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 15,
   },
-  guestTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#FFF",
-    marginBottom: 10,
-  },
-  guestSubtitle: {
-    color: "rgba(255,255,255,0.8)",
-    textAlign: "center",
-    marginBottom: 20,
-    lineHeight: 20,
-  },
+  guestTitle: { fontSize: 24, fontWeight: "bold", marginBottom: 10 },
   guestLoginBtn: {
     backgroundColor: "#FFF",
     paddingHorizontal: 25,
